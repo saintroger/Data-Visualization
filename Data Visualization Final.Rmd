@@ -1,0 +1,173 @@
+---
+title: "Data Visualiaztion Final Report"
+author: "Saint Roger Bountsebe Eboueme"
+date: "11/05/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(tidyverse)
+library(ggrepel)
+library(tidyverse)
+library(socviz)
+library(dplyr)
+library(knitr)
+library(broom)
+data <- read_csv('/Users/saintroger/Documents/Data_viz/Data/Building_Permits.csv')
+
+```
+
+## Final Presentation
+Analyst: Saint Roger
+Client: Nick
+
+## Tables Of Content
+
+- Providing Context
+- Background on the data 
+- Question asked by the client
+- Methods and Exploration
+- First plot
+- Second Plot 
+- Third plot
+- Recommendation 
+
+
+## Context of analysis
+- Accurate planning
+
+
+## Background on the data
+Brief talk about the sources of the data and what it means
+
+- San Francisco department of buildings inspection 
+- Important Columns: `duration_1` ~ `num_unit_added` +`Proposed Use` + `Permit Type` + `Estimated Cost`
+
+
+## Question
+
+What factors have a significant impact in the duration it takes to issue a permit?
+
+
+## Methods and Exploration
+
+- Create 2 new variables
+```{r}
+data_new <- data %>% 
+  mutate(duration = as.Date(`Issued Date`) - as.Date(`Filed Date`) ) %>% 
+  mutate(num_unit_added = `Proposed Units` -  `Existing Units`)
+```
+
+```{r processing, include=FALSE}
+data_new <- filter(data_new, duration > 0)
+df <- data_new %>% 
+  group_by(`Neighborhoods - Analysis Boundaries`, `Permit Type`) %>% 
+  summarize(mean_duration = mean(duration, na.rm = TRUE),
+            prmt_tp_perNeigh = n())
+
+df <- na.omit(df) 
+```
+
+- Group by Neighborhood and Permit Type
+- Linear Regression ` lm(formula = `duration_1` ~ `num_unit_added` +`Proposed Use` + `Permit Type` + `Estimated Cost`, data =data_new)`
+
+
+## First Plot
+
+```{r fig.width=12, fig.height=8, echo=FALSE}
+p <- ggplot(data = df, 
+            mapping = aes(x =`Neighborhoods - Analysis Boundaries`, 
+                        y = `Permit Type`))
+ p + geom_point(aes(size = as.numeric(mean_duration))) +
+   coord_flip()+
+       labs(
+    x = NULL,
+    y = "Permit Type",
+    title = "Average wait time of the different type of permit across all SF Neighborhood ", 
+    caption = "Plot for presentation") 
+figure_3 <- ggsave("Figure3.png")
+
+```
+
+## Second plot
+
+```{r figure2, fig.width=8, fig.height=5, echo=FALSE}
+na.omit(data_new)
+p <- ggplot(data = df, 
+            mapping = aes(x =as.numeric(`mean_duration`), ##f6d908  "#d6c054"  #good yeallo: #DEB828  #good gray: bababa
+                        y = as.numeric(`Permit Type`)
+                        ))
+ p + geom_density_2d_filled(alpha = 0.8, show.legend = FALSE)+
+     scale_y_continuous(breaks = c(1, 2, 3, 4, 5, 6, 7, 8) ,labels = c("", "","additions alterations/repairs", "sign - erect", "", "", "", "otc alterations permit"))+
+    labs(
+    x = "Average Duration",
+    y = "Permit Type",
+    title = "Type of permits: Their occurences and the average waiting time", 
+    subtitle = "How does it take to deliver different permit types? ", 
+    caption = "This density plot shows the average number of days it takes to issue a different type of permits",
+    legend = FALSE
+  )
+ figure_2 <- ggsave("Figure2.png")
+
+```
+
+
+```{r, include=FALSE, echo=FALSE}
+data_new$duration_1 <- as.numeric(data_new$duration, units="days")
+out <- lm(formula = `duration_1` ~ `num_unit_added` +`Proposed Use` + `Permit Type` + `Estimated Cost`, data =data_new)
+out_conf <- tidy(out, conf.int = TRUE)
+out_conf %>% round_df()
+```
+
+## Third Plot 
+
+```{r Figure3, fig.width=12, fig.height=6, echo=FALSE}
+out_conf <- tidy(out, conf.int = TRUE)
+out_conf %>% round_df()
+
+#using this let's select the value at the 5 % percent significant level. 
+old <- theme_set(theme_bw())
+
+subset_out_conf <- out_conf %>% 
+  filter(statistic > 2 | statistic < - 2) 
+
+#No need to have the intercept displayed
+subset_out_conf <- subset_out_conf %>% 
+   filter( term != "(Intercept)")
+
+ #not sure out to select the 3 start only so I look at the statitic value
+more_signif <- subset_out_conf %>% 
+  filter(statistic > 3.8 | statistic < -4) #95
+           
+p <- ggplot(data = subset_out_conf, 
+            aes(x = reorder(term, estimate), 
+             y=estimate, 
+             ymin = conf.low, 
+             ymax = conf.high))
+p + geom_hline(yintercept = 0, color = "gray20") + 
+  geom_pointrange() + 
+  geom_pointrange(data = more_signif, aes(x = reorder(term, estimate), y=estimate, color ="95% level of significance ")) +
+  coord_flip() +
+  scale_x_discrete(labels = rev(c("PU antenna", "nursery(floral)", "moving & storage", "parking lot", "lending institution", "parking_garage public",  "Residential Hotel", "Food/beverage hndling", "Estimated Cost", "Office", "Permit Type", "massage parlor")))+
+  labs(
+    x = NULL,
+    y = "Value Of Estimators",
+    title = "Variables with significant impact on construction permit duration in san francisco", 
+    subtitle = "How much impact does each variables here have on the duration of a permit to be issued?", 
+    caption = "Data from the San Francisco hosuing"
+  )+ theme_set(old) +
+  theme(
+        text = element_text(family = "Times"))
+figure_1 <- ggsave("Figure1.png")
+
+```
+
+
+## Recommendation
+
+Important variables:  
+Proposed Used  
+Permit Type  
+Massage Parlor  
+Build Offices   
